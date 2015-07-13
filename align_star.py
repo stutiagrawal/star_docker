@@ -1,6 +1,9 @@
 import pipelineUtil
 import qc
 import argparse
+import glob
+import os
+import re
 
 def decompress(filename, workdir):
     """ Unpack fastq files """
