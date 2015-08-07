@@ -4,6 +4,9 @@ import argparse
 import glob
 import os
 import re
+import post_alignment_qc
+import setupLog
+import logging
 
 def decompress(filename, workdir):
     """ Unpack fastq files """
@@ -49,21 +52,50 @@ def scan_workdir(dirname):
             fastq_files = scan_workdir_helper(dirname, "fastq.bz")
     return fastq_files
 
+def post_aln_qc(args, bam_file, logger=None):
+    """ perform post alignment quality check """
+
+    #validate the post-alignment BAM file
+    post_alignment_qc.validate_bam_file(args.picard, bam_file, args.id, args.workDir, logger)
+
+    #collect RNA-seq metrics
+    post_alignment_qc.collect_rna_seq_metrics(args.picard, bam_file, args.id,
+                                                args.workDir, args.ref_flat, logger)
+
+    #run rna_seq_qc from broad institute
+    post_alignment_qc.bam_index(bam_file, args.id, logger)
+    exit_code = post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, bam_file, args.id, args.workDir,
+                                args.ref_genome,args.genome_annotation, logger)
+    print "the exit code is %s" %exit_code
+    if not(exit_code == 0):
+        reordered_bam = post_alignment_qc.reorder_bam(args.picard, bam_file, args.id, args.workDir,
+                                                args.ref_genome, logger)
+        post_alignment_qc.bam_index(reordered_bam, args.id, logger)
+        post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, reordered_bam, args.id, args.workDir,
+                                args.ref_genome,args.genome_annotation, logger)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extension of RNA-seq alignment with QC.")
     required = parser.add_argument_group("Required input parameters")
     required.add_argument("--genomeDir", default=None, help="Directory containing the reference genome index", required=True)
     required.add_argument("--tarFileIn", default=None, help="Input file containing the sequence information", required=True)
+    required.add_argument("--ref_genome", default=None, help="path to reference genome", required=True)
+    required.add_argument("--genome_annotation", default=None, help="path to genome annotation file", required=True)
+
     optional = parser.add_argument_group("optional input parameters")
     optional.add_argument('--fastqc_path', help='path to fastqc', default='/home/ubuntu/bin/FastQC/fastqc')
     optional.add_argument("--out", default="out.bam", help="Name of the output BAM file")
     optional.add_argument("--workDir", default="./", help="Work directory")
     optional.add_argument("--metaDataTab", default=None, help="File containing metadata for the alignment header")
-    optional.add_argument("--analysisID", default=None, help="Analysis ID to be considered in the metadata file")
+    optional.add_argument("--id", default=None, help="Analysis ID to be considered in the metadata file")
     optional.add_argument("--keepJunctions", default=False, action='store_true', help="keeps the junction file as {--out}.junctions")
     optional.add_argument("--useTMP", default=None, help="environment variable that is used as prefix for temprary data")
     #optional.add_argument("-h", "--help", action='store_true', help="show this help message and exit")
+    optional.add_argument("--icgc_pipeline", default="../icgc_rnaseq_align/star_align.py", help="path to icgc star alignment pipeline")
+    optional.add_argument("--picard", default="/home/ubuntu/bin/picard.jar", help="path to picard")
+    optional.add_argument("--rna_seq_qc_path", default="/home/ubuntu/bin/RNA-SeQC_v1.1.8.jar", help="path to RNASeq-QC")
+    optional.add_argument("--ref_flat", default="/home/ubuntu/SCRATCH/grch38/gencode.v21.annotation.ref_flat_final", help="path to ref flat file")
+
     star = parser.add_argument_group("STAR input parameters")
     star.add_argument("--runThreadN", type=int, default=4, help="Number of threads")
     star.add_argument("--outFilterMultimapScoreRange", type=int, default=1, help="outFilterMultimapScoreRange")
@@ -89,6 +121,10 @@ if __name__ == "__main__":
     star.add_argument("--outSAMattrRGfile", default=None, help="File containing the RG attribute line submitted to outSAMattrRGline")
 
     args = parser.parse_args()
+
+    log_file = "%s.log" % os.path.join(args.workDir, "%s_2" %args.id)
+    logger = setupLog.setup_logging(logging.INFO, "%s_2" %args.id, log_file)
+
     decompress(args.tarFileIn, args.workDir)
     read_group_pairs = scan_workdir(args.workDir)
     for (rg_id, reads_1, reads_2) in read_group_pairs:
@@ -96,5 +132,11 @@ if __name__ == "__main__":
         if not os.path.isdir(rg_id_dir):
             os.mkdir(rg_id_dir)
         qc.fastqc(args.fastqc_path, reads_1, reads_2, rg_id_dir, rg_id, None)
+
+    cmd = ["python", args.icgc_pipeline, "--genomeDir", args.genomeDir, "--tarFileIn", args.tarFileIn, "--workDir", args.workDir, "--out", args.out, "--genomeFastaFiles", args.genomeFastaFiles, "--runThreadN", str(args.runThreadN)]
+    #print cmd
+    pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
+
+    post_aln_qc(args, args.out, logger)
 
 
