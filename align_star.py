@@ -76,11 +76,9 @@ def post_aln_qc(args, bam_file, logger=None):
                                 args.ref_genome,args.genome_annotation, logger)
 
 def bam_to_fastq(fastq_dir, bam_file, analysis_id, logger=None):
+    """ Convert input BAM to Fastq files """
 
-    print "Fastq_dir is %s" %fastq_dir
     tmp_fastq = os.path.join(fastq_dir, 'tmp')
-    print tmp_fastq
-    #os.mkdir(tmp_fastq)
 
     cmd = ['bamtofastq', 'filename=%s' %bam_file, 'outputdir=%s' %fastq_dir,
             'tryoq=1', 'collate=1', 'outputperreadgroup=1', 'T=%s' %tmp_fastq]
@@ -92,8 +90,7 @@ def bam_to_fastq(fastq_dir, bam_file, analysis_id, logger=None):
             if filename.endswith(".fq"):
                 new_filename = filename.replace(".fq", ".fastq")
                 os.rename(os.path.join(fastq_dir, filename), os.path.join(fastq_dir, new_filename))
-
-    if not exit_code == 0:
+    else:
         logger.error("Biobambam BamToFastq conversion of %s returned a non-zero exit code %s"
                     %(analysis_id, exit_code))
 
@@ -208,11 +205,14 @@ if __name__ == "__main__":
     if not args.outSAMattrRGfile == None:
         cmd = cmd.append("--outSAMattrRGfile")
         cmd = cmd.append(str(args.outSAMattrRGfile))
-    print cmd
 
-    print 'Starting Alignment with STAR'
+    logger.info('Starting Alignment with STAR')
+
     exit_code = pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
-    print 'Starting post alignment QC'
-    post_aln_qc(args, args.out, logger)
+    if exit_code == 0:
+        logger.info('Starting post alignment QC')
+        post_aln_qc(args, args.out, logger)
+    else:
+        logger.error('STAR returned a non-zero exit code %s' %exit_code)
 
 
