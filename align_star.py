@@ -61,24 +61,48 @@ def post_aln_qc(args, bam_file, logger=None):
     #collect RNA-seq metrics
     post_alignment_qc.collect_rna_seq_metrics(args.picard, bam_file, args.id,
                                                 args.workDir, args.ref_flat, logger)
-
     #run rna_seq_qc from broad institute
     post_alignment_qc.bam_index(bam_file, args.id, logger)
+
     exit_code = post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, bam_file, args.id, args.workDir,
                                 args.ref_genome,args.genome_annotation, logger)
-    print "the exit code is %s" %exit_code
+
     if not(exit_code == 0):
+
         reordered_bam = post_alignment_qc.reorder_bam(args.picard, bam_file, args.id, args.workDir,
                                                 args.ref_genome, logger)
         post_alignment_qc.bam_index(reordered_bam, args.id, logger)
         post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, reordered_bam, args.id, args.workDir,
                                 args.ref_genome,args.genome_annotation, logger)
 
+def bam_to_fastq(fastq_dir, bam_file, analysis_id, logger=None):
+
+    print "Fastq_dir is %s" %fastq_dir
+    tmp_fastq = os.path.join(fastq_dir, 'tmp')
+    print tmp_fastq
+    #os.mkdir(tmp_fastq)
+
+    cmd = ['bamtofastq', 'filename=%s' %bam_file, 'outputdir=%s' %fastq_dir,
+            'tryoq=1', 'collate=1', 'outputperreadgroup=1', 'T=%s' %tmp_fastq]
+
+    exit_code = pipelineUtil.log_function_time('Biobambam', analysis_id, cmd, logger)
+
+    if exit_code == 0:
+        for filename in os.listdir(fastq_dir):
+            if filename.endswith(".fq"):
+                new_filename = filename.replace(".fq", ".fastq")
+                os.rename(os.path.join(fastq_dir, filename), os.path.join(fastq_dir, new_filename))
+
+    if not exit_code == 0:
+        logger.error("Biobambam BamToFastq conversion of %s returned a non-zero exit code %s"
+                    %(analysis_id, exit_code))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extension of RNA-seq alignment with QC.")
     required = parser.add_argument_group("Required input parameters")
     required.add_argument("--genomeDir", default=None, help="Directory containing the reference genome index", required=True)
-    required.add_argument("--tarFileIn", default=None, help="Input file containing the sequence information", required=True)
+    required.add_argument("--input_file", default=None, help="Input file containing the sequence information", required=True)
     required.add_argument("--ref_genome", default=None, help="path to reference genome", required=True)
     required.add_argument("--genome_annotation", default=None, help="path to genome annotation file", required=True)
 
@@ -122,21 +146,73 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    log_file = "%s.log" % os.path.join(args.workDir, "%s_2" %args.id)
-    logger = setupLog.setup_logging(logging.INFO, "%s_2" %args.id, log_file)
+    log_file = "%s.log" % os.path.join(args.workDir, "%s" %args.id)
+    logger = setupLog.setup_logging(logging.INFO, "%s" %args.id, log_file)
 
-    decompress(args.tarFileIn, args.workDir)
-    read_group_pairs = scan_workdir(args.workDir)
+    if not args.workDir:
+        os.mkdir(args.workDir)
+
+    fastq_dir = os.path.join(args.workDir, '%s_fastq_files' %args.id)
+
+    if not os.path.isdir(fastq_dir):
+        os.mkdir(fastq_dir)
+
+        if(args.input_file.endswith('bam')):
+            bam_to_fastq(fastq_dir,  args.input_file, args.id,  logger)
+        else:
+            decompress(args.input_file, fastq_dir)
+
+    read_group_pairs = scan_workdir(fastq_dir)
     for (rg_id, reads_1, reads_2) in read_group_pairs:
         rg_id_dir = os.path.join(args.workDir, rg_id)
         if not os.path.isdir(rg_id_dir):
             os.mkdir(rg_id_dir)
-        qc.fastqc(args.fastqc_path, reads_1, reads_2, rg_id_dir, rg_id, None)
+            qc.fastqc(args.fastqc_path, reads_1, reads_2, rg_id_dir, rg_id, logger)
 
-    cmd = ["python", args.icgc_pipeline, "--genomeDir", args.genomeDir, "--tarFileIn", args.tarFileIn, "--workDir", args.workDir, "--out", args.out, "--genomeFastaFiles", args.genomeFastaFiles, "--runThreadN", str(args.runThreadN)]
-    #print cmd
-    pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
+    cmd = ["python", args.icgc_pipeline,
+            "--genomeDir", str(args.genomeDir),
+            "--FastqFileIn", str(fastq_dir),
+            "--workDir", str(args.workDir),
+            "--out", str(args.out),
+            "--genomeFastaFiles", str(args.genomeFastaFiles),
+            "--runThreadN", str(args.runThreadN),
+            "--outFilterMultimapScoreRange", str(args.outFilterMultimapScoreRange),
+            "--outFilterMultimapNmax", str(args.outFilterMultimapNmax),
+            "--outFilterMismatchNmax", str(args.outFilterMismatchNmax),
+            "--alignIntronMax", str(args.alignIntronMax),
+            "--alignMatesGapMax", str(args.alignMatesGapMax),
+            "--sjdbScore", str(args.sjdbScore),
+            "--limitBAMsortRAM", str(args.limitBAMsortRAM),
+            "--alignSJDBoverhangMin", str(args.alignSJDBoverhangMin),
+            "--genomeLoad", str(args.genomeLoad),
+            "--outFilterMatchNminOverLread", str(args.outFilterMatchNminOverLread),
+            "--outFilterScoreMinOverLread", str(args.outFilterScoreMinOverLread),
+            "--twopass1readsN", str(args.twopass1readsN),
+            "--sjdbOverhang", str(args.sjdbOverhang),
+            "--outSAMstrandField", str(args.outSAMstrandField),
+            "--outSAMunmapped", str(args.outSAMunmapped)
+            ]
 
+    if args.keepJunctions:
+        cmd = cmd.append("--keepJunctions")
+        cmd = cmd.append(str(args.keepJunctions))
+
+    if not args.metaDataTab == None:
+        cmd = cmd.append("--metaDataTab")
+        cmd = cmd.append(str(args.metaDataTab))
+
+    if not args.outSAMattrRGline == None:
+        cmd = cmd.append("--outSAMattrRGline")
+        cmd = cmd.append(str(args.outSAMattrRGline))
+
+    if not args.outSAMattrRGfile == None:
+        cmd = cmd.append("--outSAMattrRGfile")
+        cmd = cmd.append(str(args.outSAMattrRGfile))
+    print cmd
+
+    print 'Starting Alignment with STAR'
+    exit_code = pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
+    print 'Starting post alignment QC'
     post_aln_qc(args, args.out, logger)
 
 

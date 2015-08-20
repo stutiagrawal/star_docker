@@ -13,16 +13,17 @@ def retrieve_data(analysis_id, cghub_key, output_dir, logger=None):
 
         #os.system("gtdownload -v -c %s -p %s %s" %(cghub_key, output_dir, analysis_id))
 
-def run_command(cmd, logger=None):
+def run_command(cmd, logger=None, shell_var=False):
     """ Run a subprocess command """
 
     #stdoutdata, stderrdata = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-    child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell_var)
     stdoutdata, stderrdata = child.communicate()
     exit_code = child.returncode
 
     #print stdoutdata, stderrdata
     if logger != None:
+        logger.info(cmd)
         stdoutdata = stdoutdata.split("\n")
         for line in stdoutdata:
             logger.info(line)
@@ -33,17 +34,17 @@ def run_command(cmd, logger=None):
 
     return exit_code
 
-def log_function_time(fn, analysis_id, cmd, logger=None):
+def log_function_time(fn, analysis_id, cmd, logger=None, shell_var=False):
     """ Log the time taken by a command to the logger """
 
     start_time = time.time()
-    exit_code = run_command(cmd, logger)
+    exit_code = run_command(cmd, logger, shell_var)
     end_time = time.time()
 
     if logger != None:
         logger.info("%s_TIME\t%s\t%s" %(fn, analysis_id,  (end_time - start_time)/60.0))
 
-    print "exit_code at log_function_time is %s" %exit_code
+    print "exit_code for %s is %s" %(cmd, exit_code)
     return exit_code
 
 def download_from_cleversafe(logger, remote_input, local_output):
