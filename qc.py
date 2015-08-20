@@ -3,7 +3,8 @@ import logging
 import subprocess
 import pipelineUtil
 
-def fastqc(fastqc_path, reads_1, reads_2, rg_id_dir, analysis_id, logger):
+def fastqc(fastqc_path, reads_1, reads_2, rg_id_dir, analysis_id, logger=None):
+    """ perform pre-alignment qc checks using fastqc """
 
     if not os.path.isdir(rg_id_dir):
         raise Exception("Invalid directory: %s")
@@ -12,14 +13,9 @@ def fastqc(fastqc_path, reads_1, reads_2, rg_id_dir, analysis_id, logger):
     if not os.path.isdir(fastqc_results):
         os.mkdir(fastqc_results)
     cmd = [fastqc_path, reads_1, reads_2, '--outdir', fastqc_results, '--extract']
-    print cmd
-    pipelineUtil.log_function_time("FastQC", analysis_id, cmd, logger)
-    #for dirname in os.listdir(fastqc_results):
-        #dirname = os.path.join(fastqc_results, dirname)
-        #if os.path.isdir(dirname):
-           # for filename in os.listdir(dirname):
-             #   if filename == "summary.txt":
-                    #filename = "%s_%s_%s" %(analysis_id, os.path.basename(rg_id_dir), filename)
-                    #filename = os.path.join(dirname, filename)
+    exit_code = pipelineUtil.log_function_time("FastQC", analysis_id, cmd, logger)
+    if not exit_code == 0:
+        if not logger == None:
+            logger.error('FastQC returned a non-zero exit code: %s' %exit_code)
 
 
