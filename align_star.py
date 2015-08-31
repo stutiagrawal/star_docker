@@ -60,7 +60,7 @@ def post_aln_qc(args, bam_file, logger=None):
 
     #collect RNA-seq metrics
     post_alignment_qc.collect_rna_seq_metrics(args.picard, bam_file, args.id,
-                                                args.workDir, args.ref_flat, logger)
+                                              args.workDir, args.ref_flat, logger)
     #run rna_seq_qc from broad institute
     post_alignment_qc.bam_index(bam_file, args.id, logger)
 
