@@ -22,20 +22,36 @@ def decompress(filename, workdir):
     pipelineUtil.log_function_time("tar", filename, cmd)
 
 
-def scan_workdir_helper(dirname, extension):
-    fastq_files = glob.glob(os.path.join(dirname, "*_[12].%s"%(extension)))
+def scan_workdir_helper(rg_ending, dirname, extension):
+    fastq_files = glob.glob(os.path.join(dirname, "*%s.%s"%(rg_ending, extension)))
     all_read_groups = list()
     read_group_set = dict()
+    single_end = False
+
     if not (fastq_files == []):
         for filename in fastq_files:
-            rg_id = re.sub(r'_[12].%s$'%(extension), '', filename)
+            rg_id = re.sub(r'%s.%s$'%(rg_ending,extension), '', filename)
+            if rg_ending == "":
+                single_end = True
+                reads_1 = "%s.%s"  %(rg_id, extension)
+                reads_2 = ""
             read_group_set[rg_id] = read_group_set.get(rg_id, 0) + 1
-        if not all(i == 2 for i in read_group_set.values()):
+        if single_end == False and not all(i == 2 for i in read_group_set.values()):
             raise Exception("Missing Pair")
         print read_group_set
         for rg_id in read_group_set.keys():
-            reads_1 = "%s_1.%s" %(rg_id, extension)
-            reads_2 = "%s_2.%s" %(rg_id, extension)
+            if rg_ending == "_[12]":
+                reads_1 = "%s_1.%s" %(rg_id, extension)
+                reads_2 = "%s_2.%s" %(rg_id, extension)
+            if rg_ending == "_read[12]":
+                reads_1 = "%s_read1.%s"  %(rg_id, extension)
+                reads_2 = "%s_read2.%s"  %(rg_id, extension)
+            if rg_ending == "_R[12]_001":
+                reads_1 = "%s_R1_001.%s"  %(rg_id, extension)
+                reads_2 = "%s_R2_001.%s"  %(rg_id, extension)
+            if rg_ending == "_[12]_sequence":
+                reads_1 = "%s_1_sequence.%s"  %(rg_id, extension)
+                reads_2 = "%s_2_sequence.%s"  %(rg_id, extension)
             read_pair = (os.path.basename(rg_id), reads_1, reads_2)
             all_read_groups.append(read_pair)
 
@@ -44,12 +60,30 @@ def scan_workdir_helper(dirname, extension):
 def scan_workdir(dirname):
     """ Select the unpacked fastq files """
 
-    print dirname
-    fastq_files = scan_workdir_helper(dirname, "fastq")
-    if fastq_files == []:
-        fastq_files = scan_workdir_helper(dirname, "fastq.gz")
+    type_of_rg_names = ["_[12]", "_read[12]", "_R[12]_001"]
+    found_reads = False
+    fastq_files = []
+    for rg_ending in type_of_rg_names:
+        fastq_files = scan_workdir_helper(rg_ending, dirname, "fastq")
         if fastq_files == []:
-            fastq_files = scan_workdir_helper(dirname, "fastq.bz")
+            fastq_files = scan_workdir_helper(rg_ending, dirname, "fastq.gz")
+            if fastq_files == []:
+                fastq_files = scan_workdir_helper(rg_ending, dirname, "fastq.bz")
+        if not fastq_files == []:
+            found_reads = True
+            break
+    #check for .txt files
+    if not found_reads:
+        fastq_files = scan_workdir_helper("_[12]_sequence", dirname, "txt")
+        if not fastq_files == []:
+            found_reads = True
+    #check for single end reads
+    if not found_reads:
+        fastq_files = scan_workdir_helper("", dirname, "fastq")
+        if fastq_files == []:
+            fastq_files = scan_workdir_helper("", dirname, "fastq.gz")
+            if fastq_files == []:
+                fastq_files = scan_workdir_helper("", dirname, "fastq.bz")
     return fastq_files
 
 def post_aln_qc(args, bam_file, logger=None):
@@ -210,10 +244,10 @@ if __name__ == "__main__":
     logger.info('Starting Alignment with STAR')
 
     exit_code = pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
-    if exit_code == 0:
-        logger.info('Starting post alignment QC')
-        post_aln_qc(args, args.out, logger)
-    else:
-        logger.error('STAR returned a non-zero exit code %s' %exit_code)
+    #if exit_code == 0:
+    #    logger.info('Starting post alignment QC')
+    #    post_aln_qc(args, args.out, logger)
+    #else:
+    #    logger.error('STAR returned a non-zero exit code %s' %exit_code)
 
 
