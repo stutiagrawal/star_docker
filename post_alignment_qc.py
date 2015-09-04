@@ -62,6 +62,27 @@ def bam_index(bam_file, uuid, logger=None):
             logger.error("Samtools Index returned non-zero exit code %s" %exit_code)
     return exit_code
 
+def fix_mate_information(picard_path, bam_file, uuid, outdir, logger=None):
+    """ Fix the mate information for BAM files """
+
+    if os.path.isfile(picard_path) and os.path.isfile(bam_file):
+        tmp_dir = os.path.join(outdir, 'tmp')
+        outfile =  "%s.fix" %bam_file
+        if not os.path.isdir(tmp_dir):
+            os.mkdir(tmp_dir)
+        cmd = ['java', '-jar', picard_path, 'FixMateInformation', 'I=%s' %bam_file, 'O=%s' %outfile,
+                'VALIDATION_STRINGENCY=LENIENT', 'TMP_DIR=%s' %tmp_dir]
+        exit_code = pipelineUtil.log_function_time('FixMateInformation', uuid, cmd, logger)
+        if exit_code == 0:
+            assert(os.path.isfile(outfile))
+    else:
+        raise Exception("Invalid path to picard %s or BAM %s" %(picard_path, bam_file))
+
+    if not exit_code == 0:
+        if not logger == None:
+            logger.error("Picard FixMateInformation returned non-zero exit code %s" %exit_code)
+    return exit_code, outfile
+
 def reorder_bam(picard_path, bam_file, uuid, outdir, ref_genome, logger=None):
     """ Reorder the BAM file according to the reference genome """
 
@@ -79,8 +100,10 @@ def reorder_bam(picard_path, bam_file, uuid, outdir, ref_genome, logger=None):
         raise Exception("Cannot find one of bam %s, picard path %s or reference genome %s" %(bam_file, picard_path, ref_genome))
 
     if not exit_code == 0:
-       if not logger == None:
+        if not logger == None:
             logger.error("Picard reorderBAM returned non-zero exit code %s" %exit_code)
+        else:
+            raise Exception("Picard reorderBAM returned non-zero exit code %s" %exit_code)
     return outbam
 
 def rna_seq_qc(rna_seq_qc_path, bam_file, uuid, outdir, ref_genome, gtf, logger=None):

@@ -7,6 +7,7 @@ import re
 import post_alignment_qc
 import setupLog
 import logging
+import shutil
 
 def decompress(filename, workdir):
     """ Unpack fastq files """
@@ -97,16 +98,32 @@ def scan_workdir(dirname):
 def post_aln_qc(args, bam_file, logger=None):
     """ perform post alignment quality check """
 
+    post_aln_dir = os.path.join(args.workDir, 'post_alignment_qc')
+    if not os.path.isdir(post_aln_dir):
+        os.mkdir(post_aln_dir)
+    #Fix mate information for bam file
+    exit_code, fix_mate_out = post_alignment_qc.fix_mate_information(args.picard, bam_file,
+                                                                    args.id, args.workDir, logger)
+    if exit_code == 0:
+        os.remove(bam_file)
+        assert(not os.path.isfile(bam_file))
+        os.rename(fix_mate_out, bam_file)
+        assert(os.path.isfile(bam_file))
+
     #validate the post-alignment BAM file
-    post_alignment_qc.validate_bam_file(args.picard, bam_file, args.id, args.workDir, logger)
+    post_alignment_qc.validate_bam_file(args.picard, bam_file, args.id, post_aln_dir, logger)
 
     #collect RNA-seq metrics
     post_alignment_qc.collect_rna_seq_metrics(args.picard, bam_file, args.id,
-                                              args.workDir, args.ref_flat, logger)
+                                              post_aln_dir, args.ref_flat, logger)
     #run rna_seq_qc from broad institute
-    post_alignment_qc.bam_index(bam_file, args.id, logger)
 
-    exit_code = post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, bam_file, args.id, args.workDir,
+    post_alignment_qc.bam_index(bam_file, args.id, logger)
+    rna_seq_qc_dir = os.path.join(post_aln_dir, 'rna_seq_qc')
+    if not os.path.isdir(rna_seq_qc_dir):
+        os.mkdir(rna_seq_qc_dir)
+
+    exit_code = post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, bam_file, args.id, rna_seq_qc_dir,
                                 args.ref_genome,args.rna_seq_qc_annotation, logger)
 
     if not(exit_code == 0):
@@ -116,6 +133,11 @@ def post_aln_qc(args, bam_file, logger=None):
         post_alignment_qc.bam_index(reordered_bam, args.id, logger)
         post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, reordered_bam, args.id, args.workDir,
                                 args.ref_genome,args.rna_seq_qc_annotation, logger)
+
+        if os.path.isfile(reordered_bam):
+            os.remove(reordered_bam)
+        if os.path.isfile('%s.bai' %reordered_bam):
+            os.remove('%s.bai' %reordered_bam)
 
 def bam_to_fastq(fastq_dir, bam_file, analysis_id, logger=None):
     """ Convert input BAM to Fastq files """
@@ -151,7 +173,7 @@ if __name__ == "__main__":
     optional.add_argument("--out", default="out.bam", help="Name of the output BAM file")
     optional.add_argument("--workDir", default="./", help="Work directory")
     optional.add_argument("--metaDataTab", default=None, help="File containing metadata for the alignment header")
-    optional.add_argument("--id", default=None, help="Analysis ID to be considered in the metadata file")
+    optional.add_argument("--id", default='unknown', help="Analysis ID to be considered in the metadata file")
     optional.add_argument("--keepJunctions", default=False, action='store_true', help="keeps the junction file as {--out}.junctions")
     optional.add_argument("--useTMP", default=None, help="environment variable that is used as prefix for temprary data")
     #optional.add_argument("-h", "--help", action='store_true', help="show this help message and exit")
@@ -203,8 +225,11 @@ if __name__ == "__main__":
             decompress(args.input_file, fastq_dir)
 
     read_group_pairs = scan_workdir(fastq_dir)
+    pre_aln_qc_dir = os.path.join(args.workDir, 'pre_alignment_qc')
+    if not os.path.isdir(pre_aln_qc_dir):
+        os.mkdir(pre_aln_qc_dir)
     for (rg_id, reads_1, reads_2) in read_group_pairs:
-        rg_id_dir = os.path.join(args.workDir, rg_id)
+        rg_id_dir = os.path.join(pre_aln_qc_dir, rg_id)
         if not os.path.isdir(rg_id_dir):
             os.mkdir(rg_id_dir)
             qc.fastqc(args.fastqc_path, reads_1, reads_2, rg_id_dir, rg_id, logger)
@@ -257,5 +282,6 @@ if __name__ == "__main__":
         post_aln_qc(args, args.out, logger)
     else:
         logger.error('STAR returned a non-zero exit code %s' %exit_code)
-
+    #remove unwanted files
+    shutil.rmtree(fastq_dir)
 
