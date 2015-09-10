@@ -131,7 +131,7 @@ def post_aln_qc(args, bam_file, logger=None):
         reordered_bam = post_alignment_qc.reorder_bam(args.picard, bam_file, args.id, args.workDir,
                                                 args.ref_genome, logger)
         post_alignment_qc.bam_index(reordered_bam, args.id, logger)
-        post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, reordered_bam, args.id, args.workDir,
+        post_alignment_qc.rna_seq_qc(args.rna_seq_qc_path, reordered_bam, args.id, rna_seq_qc_dir,
                                 args.ref_genome,args.rna_seq_qc_annotation, logger)
 
         if os.path.isfile(reordered_bam):
@@ -167,6 +167,8 @@ if __name__ == "__main__":
     required.add_argument("--ref_genome", default=None, help="path to reference genome", required=True)
     required.add_argument("--genome_annotation", default=None, help="path to genome annotation file", required=True)
     required.add_argument("--rna_seq_qc_annotation", default=None, help="annotation file for RNAseq-QC", required=True)
+    required.add_argument("--sample", default="Unknown", help="Sample ID for the read groups", required=True)
+    required.add_argument("--library", default="Unknown", help="Library ID for the read groups", required=True)
 
     optional = parser.add_argument_group("optional input parameters")
     optional.add_argument('--fastqc_path', help='path to fastqc', default='/home/ubuntu/bin/FastQC/fastqc')
@@ -278,10 +280,13 @@ if __name__ == "__main__":
 
     exit_code = pipelineUtil.log_function_time("STAR_ALIGN", args.id, cmd, logger)
     if exit_code == 0:
+        logger.info('Adding read group information')
+        post_alignment_qc.reheader_bam_file(args.out, args.sample, args.library, args.workDir, logger)
         logger.info('Starting post alignment QC')
         post_aln_qc(args, args.out, logger)
     else:
         logger.error('STAR returned a non-zero exit code %s' %exit_code)
+
     #remove unwanted files
     shutil.rmtree(fastq_dir)
 

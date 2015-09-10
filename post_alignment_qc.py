@@ -1,5 +1,6 @@
 import pipelineUtil
 import os
+import subprocess
 
 def validate_bam_file(picard_path, bam_file, uuid, outdir, logger=None):
    """ Validate resulting post-alignment BAM file """
@@ -146,3 +147,31 @@ def add_or_replace_read_group(picard_path, bam_file,  outdir, uuid, rg_id, rg_lb
     else:
         raise Exception('Could not add or replace read groups. Check log file for errors')
 
+def reheader_bam_file(bam_file, sample, library, workDir, logger):
+    "Reheader BAM file with SM and LB"
+
+    if os.path.isfile(bam_file) and os.path.isdir(workDir):
+        cmd = ['samtools', 'view', '-H', bam_file]
+        header = open(os.path.join(workDir, 'header.sam'), "w")
+        subprocess.call(cmd, stdout=header)
+        header.close()
+
+        header = open(os.path.join(workDir, 'header.sam'), "r")
+        new_header = open(os.path.join(workDir, 'header_new.sam'), "w")
+        for line in header:
+            if not line.startswith("@RG"):
+                new_header.write(line)
+            else:
+                line = line.split("\t")
+                RG = line[0] + "\t" + line[1].rstrip() + "\tSM:%s" %sample + "\tLB:%s\n" %library
+                new_header.write(RG)
+        header.close()
+        new_header.close()
+        os.remove(os.path.join(workDir, 'header.sam'))
+        new_bam = '%s.rehead' %bam_file
+        new_bam_file = open(new_bam, "w")
+        cmd = ['samtools', 'reheader', os.path.join(workDir, 'header_new.sam'), bam_file]
+        subprocess.call(cmd, stdout=new_bam_file)
+        new_bam_file.close()
+        os.remove(os.path.join(workDir, 'header_new.sam'))
+        os.rename(new_bam, bam_file)
