@@ -93,6 +93,7 @@ def scan_workdir(dirname):
             fastq_files = scan_workdir_helper("", dirname, "fastq.gz")
             if fastq_files == []:
                 fastq_files = scan_workdir_helper("", dirname, "fastq.bz")
+
     return fastq_files
 
 def post_aln_qc(args, bam_file, logger=None):
@@ -226,7 +227,17 @@ if __name__ == "__main__":
         else:
             decompress(args.input_file, fastq_dir)
 
+    # if there are subdirectories after decompressing, move all files to the
+    # parent directory.
+    for subdir in os.listdir(fastq_dir):
+        subdir = os.path.join(fastq_dir, subdir)
+        if os.path.isdir(subdir):
+            for fname in os.listdir(subdir):
+                shutil.move(os.path.join(subdir, fname), fastq_dir)
+            shutil.rmtree(subdir)
+
     read_group_pairs = scan_workdir(fastq_dir)
+
     pre_aln_qc_dir = os.path.join(args.workDir, 'pre_alignment_qc')
     if not os.path.isdir(pre_aln_qc_dir):
         os.mkdir(pre_aln_qc_dir)
