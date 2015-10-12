@@ -21,6 +21,9 @@ def run_command(cmd, logger=None, shell_var=False):
     stdoutdata, stderrdata = child.communicate()
     exit_code = child.returncode
 
+    if exit_code != 0:
+        raise Exception("The command %s returned with non-zero exitcode %s" %(cmd, exit_code))
+
     #print stdoutdata, stderrdata
     if logger != None:
         logger.info(cmd)
