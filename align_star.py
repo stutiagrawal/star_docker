@@ -297,6 +297,7 @@ if __name__ == "__main__":
         post_aln_qc(args, args.out, logger)
     else:
         logger.error('STAR returned a non-zero exit code %s' %exit_code)
+        raise Exception('STAR command %s returned a non-zero exit code %s' %(cmd, exit_code))
 
     #remove unwanted files
     shutil.rmtree(fastq_dir)
