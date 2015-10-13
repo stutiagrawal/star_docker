@@ -21,7 +21,11 @@ def validate_bam_file(picard_path, bam_file, uuid, outdir, logger=None):
 
    if not exit_code == 0:
        if not logger == None:
-            logger.error("Picard ValidateSamFile returned non-zero exit code %s" %exit_code)
+            logger.error("""
+                        Picard ValidateSamFile command %s returned non-zero exit code %s
+                        but continuting with metrics collection.
+                        """
+                        %(cmd, exit_code))
 
    return exit_code
 
@@ -45,6 +49,8 @@ def collect_rna_seq_metrics(picard_path, bam_file, uuid, outdir, ref_flat, logge
     if not exit_code == 0:
        if not logger == None:
             logger.error("Picard CollectRnaSeqMetrics returned non-zero exit code %s" %exit_code)
+       raise Exception("Picard CollectRnaSeqMetrics command %s returned non-zero exit code %s" %(cmd, exit_code))
+
     return exit_code
 
 def bam_index(bam_file, uuid, logger=None):
@@ -61,6 +67,8 @@ def bam_index(bam_file, uuid, logger=None):
     if not exit_code == 0:
        if not logger == None:
             logger.error("Samtools Index returned non-zero exit code %s" %exit_code)
+       raise Exception("Samtools Index command %s returned non-zero exit code %s" %(cmd, exit_code))
+
     return exit_code
 
 def fix_mate_information(picard_path, bam_file, uuid, outdir, logger=None):
@@ -82,6 +90,8 @@ def fix_mate_information(picard_path, bam_file, uuid, outdir, logger=None):
     if not exit_code == 0:
         if not logger == None:
             logger.error("Picard FixMateInformation returned non-zero exit code %s" %exit_code)
+        raise Exception("Picard FixMateInformation command %s returned non-zero exit code %s" %(cmd, exit_code))
+
     return exit_code, outfile
 
 def reorder_bam(picard_path, bam_file, uuid, outdir, ref_genome, logger=None):
@@ -103,8 +113,8 @@ def reorder_bam(picard_path, bam_file, uuid, outdir, ref_genome, logger=None):
     if not exit_code == 0:
         if not logger == None:
             logger.error("Picard reorderBAM returned non-zero exit code %s" %exit_code)
-        else:
-            raise Exception("Picard reorderBAM returned non-zero exit code %s" %exit_code)
+        raise Exception("Picard reorderBAM command %s returned non-zero exit code %s" %(cmd, exit_code))
+
     return outbam
 
 def rna_seq_qc(rna_seq_qc_path, bam_file, uuid, outdir, ref_genome, gtf, logger=None):
@@ -120,6 +130,8 @@ def rna_seq_qc(rna_seq_qc_path, bam_file, uuid, outdir, ref_genome, gtf, logger=
     if not exit_code == 0:
        if not logger == None:
             logger.error("Broad's RNA-Seq-QC returned non-zero exit code %s" %exit_code)
+       raise Exception("Broad's RNA-Seq-QC command %s returned non-zero exit code %s" %(cmd, exit_code))
+
     return exit_code
 
 def add_or_replace_read_group(picard_path, bam_file,  outdir, uuid, rg_id, rg_lb="Unknown", rg_pl="Unknown", rg_pu="Unknown",rg_sm="Unknown", logger=None):
@@ -140,6 +152,7 @@ def add_or_replace_read_group(picard_path, bam_file,  outdir, uuid, rg_id, rg_lb
     if not exit_code == 0:
        if not logger == None:
             logger.error("Picard AddOrReplaceReadGroups returned non-zero exit code %s" %exit_code)
+       raise Exception("Picard AddOrReplaceReadGroups command %s returned non-zero exit code %s" %(cmd, exit_code))
 
     if os.path.isfile(outbam):
         print "returning file now %s" %outbam
