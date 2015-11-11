@@ -8,6 +8,7 @@ import post_alignment_qc
 import setupLog
 import logging
 import shutil
+import gzip
 
 def decompress(filename, workdir):
     """ Unpack fastq files """
@@ -41,7 +42,7 @@ def scan_workdir_helper(rg_ending, dirname, extension):
         if single_end == False and not all(i == 2 for i in read_group_set.values()):
             raise Exception("Missing Pair")
 
-        print read_group_set
+        #print read_group_set
         for rg_id in read_group_set.keys():
             if rg_ending == "_[12]":
                 reads_1 = "%s_1.%s" %(rg_id, extension)
@@ -159,6 +160,29 @@ def bam_to_fastq(fastq_dir, bam_file, analysis_id, logger=None):
         logger.error("Biobambam BamToFastq conversion of %s returned a non-zero exit code %s"
                     %(analysis_id, exit_code))
 
+def fix_non_standard_format(fastq, fixed_dir):
+    if not os.path.isfile(fastq):
+        raise Exception ("Cannot file file %s" %fastq)
+
+    count = 0
+    fixed_fastq = os.path.join(fixed_dir, os.path.basename(fastq))
+    if fastq.endswith(".gz"):
+        f = gzip.open(fastq, "rb")
+        fixed = gzip.open(fixed_fastq, "wb")
+    else:
+        fixed = open(fixed_fastq, "w")
+        f = open(fastq, "r")
+
+    for line in f:
+        if count % 4 == 1:
+            line = line.replace(".", "N")
+        fixed.write(line)
+        count += 1
+
+    f.close()
+    fixed.close()
+    assert(os.path.isfile(fixed_fastq))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extension of RNA-seq alignment with QC.")
@@ -184,6 +208,7 @@ if __name__ == "__main__":
     optional.add_argument("--picard", default="/home/ubuntu/bin/picard-tools-1.136/picard.jar", help="path to picard")
     optional.add_argument("--rna_seq_qc_path", default="/home/ubuntu/bin/RNA-SeQC_v1.1.8.jar", help="path to RNASeq-QC")
     optional.add_argument("--ref_flat", default="/home/ubuntu/SCRATCH/grch38/gencode.v21.annotation.ref_flat_final", help="path to ref flat file")
+    optional.add_argument("--fix_non_standard", default="F", help="Fix non-standard formatting of ambiguous bases")
 
     star = parser.add_argument_group("STAR input parameters")
     star.add_argument("--runThreadN", type=int, default=4, help="Number of threads")
@@ -227,6 +252,7 @@ if __name__ == "__main__":
         else:
             decompress(args.input_file, fastq_dir)
 
+
     # if there are subdirectories after decompressing, move all files to the
     # parent directory.
     for subdir in os.listdir(fastq_dir):
@@ -235,6 +261,21 @@ if __name__ == "__main__":
             for fname in os.listdir(subdir):
                 shutil.move(os.path.join(subdir, fname), fastq_dir)
             shutil.rmtree(subdir)
+
+    if (args.fix_non_standard == "T"):
+        cur_files = os.listdir(fastq_dir)
+        fixed_dir = os.path.join(args.workDir, "%s_fixed_fastq_files" %args.id)
+        if not os.path.isdir(fixed_dir):
+            os.mkdir(fixed_dir)
+        for filename in cur_files:
+            filename = os.path.join(fastq_dir, filename)
+            fix_non_standard_format(filename, fixed_dir)
+            os.remove(filename)
+        shutil.rmtree(fastq_dir)
+        fastq_dir = fixed_dir
+    else:
+        if not args.fix_non_standard == "F":
+            raise Exception ("Acceptable arguments to --fix_non_standard are T and F")
 
     read_group_pairs = scan_workdir(fastq_dir)
 
