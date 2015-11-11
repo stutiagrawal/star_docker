@@ -205,7 +205,7 @@ if __name__ == "__main__":
     optional.add_argument("--useTMP", default=None, help="environment variable that is used as prefix for temprary data")
     #optional.add_argument("-h", "--help", action='store_true', help="show this help message and exit")
     optional.add_argument("--icgc_pipeline", default="/home/ubuntu/icgc_rnaseq_align/star_align.py", help="path to icgc star alignment pipeline")
-    optional.add_argument("--picard", default="/home/ubuntu/bin/picard-tools-1.136/picard.jar", help="path to picard")
+    optional.add_argument("--picard", default="/home/ubuntu/bin/picard/picard.jar", help="path to picard")
     optional.add_argument("--rna_seq_qc_path", default="/home/ubuntu/bin/RNA-SeQC_v1.1.8.jar", help="path to RNASeq-QC")
     optional.add_argument("--ref_flat", default="/home/ubuntu/SCRATCH/grch38/gencode.v21.annotation.ref_flat_final", help="path to ref flat file")
     optional.add_argument("--fix_non_standard", default="F", help="Fix non-standard formatting of ambiguous bases")
