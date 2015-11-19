@@ -25,7 +25,7 @@ def htseq_count(bam, analysis_id, annotation, outdir, logger):
             stdout, stderr = child.communicate()
             exit_code = child.returncode
 
-       outfile.close()
+        outfile.close()
 
         if logger != None:
             stderr = stderr.split("\n")
